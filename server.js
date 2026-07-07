@@ -179,4 +179,9 @@ cron.schedule('0 */2 * * *', () => {
   if (hour >= 10 && hour < 19) runCallCycle();
 });
 
-app.listen(PORT, () => console.log(`DK Gold server running on port ${PORT}`));
+// Vercel needs the app exported like this instead of app.listen()
+if (process.env.VERCEL) {
+  module.exports = app;
+} else {
+  app.listen(PORT, () => console.log(`DK Gold server running on port ${PORT}`));
+}

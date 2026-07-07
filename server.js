@@ -22,7 +22,7 @@ const axios = require('axios');
 const app = express();
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
-app.use('/audio', express.static(path.join(__dirname, 'audio'))); // serves generated mp3s publicly
+// audio serving is set up below, after AUDIO_DIR is defined
 
 const PORT = process.env.PORT || 3000;
 const PUBLIC_URL = process.env.PUBLIC_URL; // e.g. https://dkgold-console.onrender.com
@@ -32,7 +32,9 @@ const EXOTEL_API_KEY = process.env.EXOTEL_API_KEY;
 const EXOTEL_API_TOKEN = process.env.EXOTEL_API_TOKEN;
 const EXOPHONE = process.env.EXOPHONE;
 
-if (!fs.existsSync(path.join(__dirname, 'audio'))) fs.mkdirSync(path.join(__dirname, 'audio'));
+const AUDIO_DIR = process.env.VERCEL ? '/tmp/audio' : path.join(__dirname, 'audio');
+if (!fs.existsSync(AUDIO_DIR)) fs.mkdirSync(AUDIO_DIR, { recursive: true });
+if (!process.env.VERCEL) app.use('/audio', express.static(AUDIO_DIR));
 
 // ---------- GOOGLE SHEETS ----------
 // On Vercel, credentials come from an env variable (not a file on disk)
@@ -88,8 +90,14 @@ async function generateAudio(customer) {
     audioConfig: { audioEncoding: 'MP3', speakingRate: 0.95 }
   });
   const fileName = `${customer.phone.replace(/\D/g, '')}-${Date.now()}.mp3`;
-  fs.writeFileSync(path.join(__dirname, 'audio', fileName), response.audioContent, 'binary');
-  return `${PUBLIC_URL}/audio/${fileName}`; // public URL Exotel will fetch
+  const filePath = path.join(AUDIO_DIR, fileName);
+  fs.writeFileSync(filePath, response.audioContent, 'binary');
+  if (process.env.VERCEL) {
+    // On Vercel there's no persistent public file hosting, so return audio as base64 directly.
+    const base64 = fs.readFileSync(filePath, { encoding: 'base64' });
+    return `data:audio/mp3;base64,${base64}`;
+  }
+  return `${PUBLIC_URL}/audio/${fileName}`; // public URL Exotel will fetch (non-Vercel deployments)
 }
 
 // ---------- EXOTEL ----------
